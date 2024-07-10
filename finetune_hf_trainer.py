@@ -363,6 +363,7 @@ def main():
     parser.add_argument(
         '--full_train', action='store_true', help='Use full training dataset (DocVQA)'
     )
+    parser.add_argument('--pre_evaluation', action='store_true', help='Evaluate before finetune')
     parser.add_argument('--use_flash_attention', action='store_true', help='Use Flash Attention')
     parser.add_argument('--bf16', action='store_true', help='Use BF16')
     parser.add_argument('--use_lora', action='store_true', help='Use LoRA')
@@ -370,6 +371,8 @@ def main():
     parser.add_argument('--output_dir', type=str, default='./output/', help='Output directory')
     parser.add_argument('--batch_size', type=int, default=16, help='Batch size')
     parser.add_argument('--num_crops', type=int, default=16, help='Number of maximum image crops')
+    parser.add_argument('--max_steps', type=int, default=-1, help='Number of maximum training steps')
+    parser.add_argument('--warmup_steps', type=int, default=10, help='Number of warmup steps')
     parser.add_argument(
         '--num_train_epochs', type=int, default=1, help='Number of training epochs'
     )
@@ -416,6 +419,7 @@ def main():
     # hard coded training args
     training_args = TrainingArguments(
         num_train_epochs=args.num_train_epochs,
+        max_steps=args.max_steps,
         per_device_train_batch_size=1,  # NOTE currently only supports batch_size == 1
         per_device_eval_batch_size=1,
         gradient_checkpointing=True,
@@ -428,7 +432,7 @@ def main():
         weight_decay=args.wd,
         max_grad_norm=1.0,
         lr_scheduler_type='linear',
-        warmup_steps=50,
+        warmup_steps=args.warmup_steps,
         logging_steps=10,
         output_dir=args.output_dir,
         save_strategy='no',
@@ -456,15 +460,16 @@ def main():
     if not args.use_qlora:
         local_rank = int(os.environ.get('LOCAL_RANK', 0))
         model = model.to(f'cuda:{local_rank}')
-    anls = evaluate(
-        model,
-        processor,
-        eval_dataset,
-        save_path=out_path / 'eval_before.json',
-        disable_tqdm=not args.tqdm,
-    )
-    if accelerator.is_main_process:
-        print(f'Average normalized Levenshtein similarity before finetuning: {anls}')
+    if args.pre_evaluation:
+        anls = evaluate(
+            model,
+            processor,
+            eval_dataset,
+            save_path=out_path / 'eval_before.json',
+            disable_tqdm=not args.tqdm,
+        )
+        if accelerator.is_main_process:
+            print(f'Average normalized Levenshtein similarity before finetuning: {anls}')
 
     if args.use_lora:
         lora_config = create_lora_config(
