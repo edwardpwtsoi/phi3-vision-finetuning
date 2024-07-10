@@ -176,7 +176,7 @@ class VQADataCollatorBase(ABC):
 
     @staticmethod
     @abstractmethod
-    def _from_prompt_message(question):
+    def _form_prompt_message(question):
         raise NotImplementedError
 
     def __call__(self, examples):
@@ -186,7 +186,7 @@ class VQADataCollatorBase(ABC):
         image = self._get_image_from_example(example)
         question = self._get_question_from_example(example)
         answer = self._get_answer_from_example(example)
-        prompt_message = self._from_prompt_message(question)
+        prompt_message = self._form_prompt_message(question)
         prompt = self.processor.tokenizer.apply_chat_template(
             [prompt_message], tokenize=False, add_generation_prompt=True
         )
