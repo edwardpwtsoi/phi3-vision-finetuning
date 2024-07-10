@@ -180,7 +180,7 @@ class VQADataCollatorBase(ABC):
         raise NotImplementedError
 
     def __call__(self, examples):
-        assert len(examples) == 1, 'Phi-3-V only supports batch_size == 1'
+        assert len(examples) == 1, f'Phi-3-V only supports batch_size == 1, but got examples of length {len(examples)}'
         example = examples[0]
 
         image = self._get_image_from_example(example)
