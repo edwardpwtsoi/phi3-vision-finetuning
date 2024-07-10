@@ -17,6 +17,7 @@ import argparse
 import json
 import os
 import random
+from abc import ABC, abstractmethod
 from pathlib import Path
 
 import Levenshtein
@@ -154,95 +155,107 @@ def create_model(model_name_or_path, use_flash_attention=False, use_qlora=False)
     return model
 
 
-class MiniDocVQADataCollator:
+class VQADataCollatorBase(ABC):
     def __init__(self, processor):
         self.processor = processor
+
+    @staticmethod
+    @abstractmethod
+    def _get_image_from_example(example):
+        raise NotImplementedError
+
+    @staticmethod
+    @abstractmethod
+    def _get_question_from_example(example):
+        raise NotImplementedError
+
+    @staticmethod
+    @abstractmethod
+    def _get_answer_from_example(example):
+        raise NotImplementedError
+
+    @staticmethod
+    @abstractmethod
+    def _from_prompt_message(question):
+        raise NotImplementedError
 
     def __call__(self, examples):
         assert len(examples) == 1, 'Phi-3-V only supports batch_size == 1'
         example = examples[0]
 
-        image = example['image']
-        question = example['query']['en']
-        answer = random.choice(example['answers'])
-        prompt_message = {
+        image = self._get_image_from_example(example)
+        question = self._get_question_from_example(example)
+        answer = self._get_answer_from_example(example)
+        prompt_message = self._from_prompt_message(question)
+        prompt = self.processor.tokenizer.apply_chat_template(
+            [prompt_message], tokenize=False, add_generation_prompt=True
+        )
+        answer = f'{answer}<|end|>\n<|endoftext|>'
+
+        # mask questions for labels
+        batch = self.processor(prompt, [image], return_tensors='pt')
+        prompt_input_ids = batch['input_ids']
+        # Do not add bos token to answer
+        answer_input_ids = self.processor.tokenizer(
+            answer, add_special_tokens=False, return_tensors='pt'
+        )['input_ids']
+        input_ids = torch.cat([prompt_input_ids, answer_input_ids], dim=1)
+        ignore_index = -100
+        labels = torch.cat(
+            [
+                torch.tensor([ignore_index] * len(prompt_input_ids[0])).unsqueeze(0),
+                answer_input_ids,
+            ],
+            dim=1,
+        )
+
+        batch['input_ids'] = input_ids
+        del batch['attention_mask']
+        batch['labels'] = labels
+
+        return batch
+
+
+class MiniDocVQADataCollator(VQADataCollatorBase):
+    @staticmethod
+    def _get_image_from_example(example):
+        return example['image']
+
+    @staticmethod
+    def _get_question_from_example(example):
+        return example['query']['en']
+
+    @staticmethod
+    def _get_answer_from_example(example):
+        return random.choice(example['answers'])
+
+    @staticmethod
+    def _form_prompt_message(question):
+        return {
             'role': 'user',
             'content': f'<|image_1|>\n{question}\nAnswer briefly.',
         }
 
-        prompt = self.processor.tokenizer.apply_chat_template(
-            [prompt_message], tokenize=False, add_generation_prompt=True
-        )
-        answer = f'{answer}<|end|>\n<|endoftext|>'
 
-        # mask questions for labels
-        batch = self.processor(prompt, [image], return_tensors='pt')
-        prompt_input_ids = batch['input_ids']
-        # Do not add bos token to answer
-        answer_input_ids = self.processor.tokenizer(
-            answer, add_special_tokens=False, return_tensors='pt'
-        )['input_ids']
-        input_ids = torch.cat([prompt_input_ids, answer_input_ids], dim=1)
-        ignore_index = -100
-        labels = torch.cat(
-            [
-                torch.tensor([ignore_index] * len(prompt_input_ids[0])).unsqueeze(0),
-                answer_input_ids,
-            ],
-            dim=1,
-        )
+class DocVQADataCollator(VQADataCollatorBase):
+    @staticmethod
+    def _get_image_from_example(example):
+        return example['image']
 
-        batch['input_ids'] = input_ids
-        del batch['attention_mask']
-        batch['labels'] = labels
+    @staticmethod
+    def _get_question_from_example(example):
+        return "Reconstruct the table in the image in a HTML format."
 
-        return batch
+    @staticmethod
+    def _get_answer_from_example(example):
+        return example["html_table"]
 
-
-class DocVQADataCollator:
-    def __init__(self, processor):
-        self.processor = processor
-
-    def __call__(self, examples):
-        assert len(examples) == 1, 'Phi-3-V only supports batch_size == 1'
-        example = examples[0]
-
-        image = example['images'][0]
-        text_dict = random.choice(example['texts'])
-        question = text_dict['user']
-        answer = text_dict['assistant']
-        prompt_message = {
+    @staticmethod
+    def _form_prompt_message(question):
+        return {
             'role': 'user',
             'content': f'<|image_1|>\n{question}',
         }
-
-        prompt = self.processor.tokenizer.apply_chat_template(
-            [prompt_message], tokenize=False, add_generation_prompt=True
-        )
-        answer = f'{answer}<|end|>\n<|endoftext|>'
-
-        # mask questions for labels
-        batch = self.processor(prompt, [image], return_tensors='pt')
-        prompt_input_ids = batch['input_ids']
-        # Do not add bos token to answer
-        answer_input_ids = self.processor.tokenizer(
-            answer, add_special_tokens=False, return_tensors='pt'
-        )['input_ids']
-        input_ids = torch.cat([prompt_input_ids, answer_input_ids], dim=1)
-        ignore_index = -100
-        labels = torch.cat(
-            [
-                torch.tensor([ignore_index] * len(prompt_input_ids[0])).unsqueeze(0),
-                answer_input_ids,
-            ],
-            dim=1,
-        )
-
-        batch['input_ids'] = input_ids
-        del batch['attention_mask']
-        batch['labels'] = labels
-
-        return batch
 
 
 def normalized_levenshtein(s1, s2):
