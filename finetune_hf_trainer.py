@@ -1,18 +1,3 @@
-"""
-example for finetuning Phi-3-V on the DocVQA dataset using the Hugging Face Trainer API
-Modified from Idefics-2 finetuning notebook:
-https://colab.research.google.com/drive/1rm3AGquGEYXfeeizE40bbDtcWh5S4Nlq?usp=sharing
-
-Install dependencies:
-    pip install transformers==4.38.1 \
-        datasets \
-        accelerate==0.30.1 \
-        peft \
-        Levenshtein \
-        deepspeed==0.13.1
-minimal run:
-    torchrun --nproc_per_node=4 finetune_hf_trainer_docvqa.py
-"""
 import argparse
 import json
 import os
