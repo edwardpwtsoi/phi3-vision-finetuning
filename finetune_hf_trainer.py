@@ -4,6 +4,7 @@ import os
 import random
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Tuple
 
 import Levenshtein
 import torch
@@ -151,12 +152,7 @@ class VQADataCollatorBase(ABC):
 
     @staticmethod
     @abstractmethod
-    def _get_question_from_example(example):
-        raise NotImplementedError
-
-    @staticmethod
-    @abstractmethod
-    def _get_answer_from_example(example):
+    def _get_question_and_answer_from_example(example) -> Tuple[str, str]:
         raise NotImplementedError
 
     @staticmethod
@@ -169,8 +165,7 @@ class VQADataCollatorBase(ABC):
         example = examples[0]
 
         image = self._get_image_from_example(example)
-        question = self._get_question_from_example(example)
-        answer = self._get_answer_from_example(example)
+        question, answer = self._get_question_and_answer_from_example(example)
         prompt_message = self._form_prompt_message(question)
         prompt = self.processor.tokenizer.apply_chat_template(
             [prompt_message], tokenize=False, add_generation_prompt=True
@@ -207,12 +202,8 @@ class MiniDocVQADataCollator(VQADataCollatorBase):
         return example['image']
 
     @staticmethod
-    def _get_question_from_example(example):
-        return example['query']['en']
-
-    @staticmethod
-    def _get_answer_from_example(example):
-        return random.choice(example['answers'])
+    def _get_question_and_answer_from_example(example):
+        return example['query']['en'], random.choice(example['answers'])
 
     @staticmethod
     def _form_prompt_message(question):
@@ -228,12 +219,8 @@ class DocVQADataCollator(VQADataCollatorBase):
         return example['image']
 
     @staticmethod
-    def _get_question_from_example(example):
-        return "Reconstruct the table in the image in a HTML format."
-
-    @staticmethod
-    def _get_answer_from_example(example):
-        return example["html_table"]
+    def _get_question_and_answer_from_example(example):
+        return "Reconstruct the table in the image in a HTML format.", example["html_table"]
 
     @staticmethod
     def _form_prompt_message(question):
