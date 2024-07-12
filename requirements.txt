@@ -1,6 +1,6 @@
 transformers>=4.38.1
 datasets
-accelerate==0.30.1
+accelerate==0.32.1
 peft
 Levenshtein
 deepspeed==0.13.1
