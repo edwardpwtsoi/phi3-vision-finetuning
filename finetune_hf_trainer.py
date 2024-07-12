@@ -216,6 +216,24 @@ class MiniDocVQADataCollator(VQADataCollatorBase):
 class DocVQADataCollator(VQADataCollatorBase):
     @staticmethod
     def _get_image_from_example(example):
+        return example['images'][0]
+
+    @staticmethod
+    def _get_question_and_answer_from_example(example):
+        text_dict = random.choice(example['texts'])
+        return text_dict['user'], text_dict['assistant']
+
+    @staticmethod
+    def _form_prompt_message(question):
+        return {
+            'role': 'user',
+            'content': f'<|image_1|>\n{question}',
+        }
+
+
+class PubTabNetHTMLDataCollator(VQADataCollatorBase):
+    @staticmethod
+    def _get_image_from_example(example):
         return example['image']
 
     @staticmethod
