@@ -7,7 +7,7 @@ pip install -r requirements.txt
 
 # (optional) flash attention -- Ampere+ GPUs (e.g., A100, H100)
 pip install ninja
-MAX_JOBS=32 pip install flash-attn==2.4.2 --no-build-isolation
+MAX_JOBS=32 pip install flash-attn --no-build-isolation
 
 # (optional) QLoRA -- Turing+ GPUs (e.g., RTX 8000)
 pip install bitsandbytes==0.43.1
