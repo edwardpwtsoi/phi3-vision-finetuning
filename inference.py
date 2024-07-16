@@ -43,13 +43,13 @@ class Phi3VisionPredictor:
 
         inputs = self.processor(prompt, [image], return_tensors="pt").to("cuda:0")
 
-        generation_args = {
-            "max_new_tokens": 10000,
-            "temperature": 0.0,
-            "do_sample": False,
-        }
-
-        generate_ids = self.model.generate(**inputs, eos_token_id=self.processor.tokenizer.eos_token_id, **generation_args)
+        generate_ids = self.model.generate(
+            **inputs,
+            eos_token_id=self.processor.tokenizer.eos_token_id,
+            max_new_tokens=10000,
+            temperature=0.0,
+            do_sample=False
+        )
 
         # remove input tokens
         generate_ids = generate_ids[:, inputs['input_ids'].shape[1]:]
