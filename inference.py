@@ -14,10 +14,11 @@ def is_valid_file(parser, arg):
 
 
 class Phi3VisionPredictor:
-    def __init__(self, model_id_or_path, use_flash_attn=True, peft_model=None, use_torch_compile=True):
+    def __init__(self, model_id_or_path, use_flash_attn=True, peft_model=None, use_torch_compile=True, local_rank=0):
+        self.local_rank = local_rank
         self.model = AutoModelForCausalLM.from_pretrained(
             model_id_or_path,
-            device_map="cuda",
+            device_map=f"cuda:{local_rank}",
             trust_remote_code=True,
             torch_dtype="auto",
             _attn_implementation='flash_attention_2' if use_flash_attn else 'eager'
@@ -41,7 +42,7 @@ class Phi3VisionPredictor:
 
         prompt = self.processor.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
 
-        inputs = self.processor(prompt, [image], return_tensors="pt").to("cuda:0")
+        inputs = self.processor(prompt, [image], return_tensors="pt").to(f"cuda:{self.local_rank}")
 
         generate_ids = self.model.generate(
             **inputs,
