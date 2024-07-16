@@ -26,6 +26,8 @@ class Phi3VisionPredictor:
         if peft_model is not None:
             self.model.load_adapter(peft_model)
 
+        self.model.eval()
+
         if use_torch_compile:
             self.model = torch.compile(self.model)
 
