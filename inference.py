@@ -20,7 +20,7 @@ class Phi3VisionPredictor:
             model_id_or_path,
             device_map=f"cuda:{local_rank}",
             trust_remote_code=True,
-            torch_dtype="auto",
+            torch_dtype=torch.bfloat16 if use_flash_attn else torch.float32,
             _attn_implementation='flash_attention_2' if use_flash_attn else 'eager'
         )
 
