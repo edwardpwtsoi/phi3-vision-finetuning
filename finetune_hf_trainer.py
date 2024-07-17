@@ -1,7 +1,5 @@
 import argparse
-import json
 import os
-import random
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Tuple
@@ -9,10 +7,8 @@ from typing import Tuple
 import Levenshtein
 import torch
 from accelerate import Accelerator
-from accelerate.utils import gather_object
 from datasets import load_dataset
 from peft import LoraConfig
-from tqdm import tqdm
 from transformers import (
     AutoModelForCausalLM,
     AutoProcessor,
@@ -20,6 +16,9 @@ from transformers import (
     Trainer,
     TrainingArguments,
 )
+
+from evaluation import evaluate
+
 
 # suggested deepspeed config
 DS_CONFIG_DICT = {
@@ -238,67 +237,6 @@ def average_normalized_levenshtein_similarity(ground_truth, predicted_answers):
     return total_score / N
 
 
-@torch.no_grad()
-def evaluate(model, processor, eval_dataset, save_path=None, disable_tqdm=False):
-    rank = int(os.environ.get('RANK', 0))
-    local_rank = int(os.environ.get('LOCAL_RANK', 0))
-    world_size = int(os.environ.get('WORLD_SIZE', 1))
-
-    model.eval()
-    answers_unique = []
-    generated_texts_unique = []
-
-    eval_dataset_shard = eval_dataset.shard(num_shards=world_size, index=rank)
-    for i in tqdm(range(len(eval_dataset_shard)), disable=(rank != 0) or disable_tqdm):
-        # Phi-3-V currently only supports batch_size == 1
-        example = eval_dataset_shard[i]
-        answers_unique.append(example['answers'])
-        image = example['image']
-        question = example['query']['en']
-        prompt_message = {
-            'role': 'user',
-            'content': f'<|image_1|>\n{question}\nAnswer briefly.',
-        }
-        prompt = processor.tokenizer.apply_chat_template(
-            [prompt_message], tokenize=False, add_generation_prompt=True
-        )
-
-        inputs = processor(prompt, [image], return_tensors='pt').to(f'cuda:{local_rank}')
-        generated_ids = model.generate(
-            **inputs, eos_token_id=processor.tokenizer.eos_token_id, max_new_tokens=64
-        )
-
-        generated_texts = processor.batch_decode(
-            generated_ids[:, inputs['input_ids'].size(1) :],
-            skip_special_tokens=True,
-            clean_up_tokenization_spaces=False,
-        )
-        generated_texts_unique.extend(generated_texts)
-
-    generated_texts_unique = [g.strip().strip('.') for g in generated_texts_unique]
-
-    # gather outputs from all ranks
-    answers_unique = gather_object(answers_unique)
-    generated_texts_unique = gather_object(generated_texts_unique)
-
-    if rank == 0:
-        anls = average_normalized_levenshtein_similarity(
-            ground_truth=answers_unique,
-            predicted_answers=generated_texts_unique,
-        )
-        if save_path:
-            with open(save_path, 'w') as f:
-                save_dict = {
-                    'answers_unique': answers_unique,
-                    'generated_texts_unique': generated_texts_unique,
-                    'anls': anls,
-                }
-                json.dump(save_dict, f)
-
-        return anls
-    return None
-
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -407,10 +345,10 @@ def main():
         model = model.to(f'cuda:{local_rank}')
     if args.pre_evaluation:
         anls = evaluate(
-            model,
-            processor,
-            eval_dataset,
-            save_path=out_path / 'eval_before.json',
+            model=model,
+            processor=processor,
+            dataset=eval_dataset,
+            output=out_path / 'eval_before',
             disable_tqdm=not args.tqdm,
         )
         if accelerator.is_main_process:
@@ -482,9 +420,9 @@ def main():
     local_rank = int(os.environ.get('LOCAL_RANK', 0))
     model = model.to(f'cuda:{local_rank}')
     anls = evaluate(
-        model,
-        processor,
-        eval_dataset,
+        model=model,
+        processor=processor,
+        dataset=eval_dataset,
         save_path=out_path / 'eval_after.json',
         disable_tqdm=not args.tqdm,
     )
