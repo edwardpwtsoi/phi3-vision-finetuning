@@ -1,5 +1,6 @@
 import argparse
 import os
+import time
 
 import torch
 from PIL import Image
@@ -96,7 +97,9 @@ def main():
 
     predictor = Phi3VisionPredictor(args.model_id_or_path, peft_model=args.peft_model)
     response = predictor(args.message, image)
+    then = time.time()
     print(response)
+    print(f"Time Taken: {time.time() - then}")
 
 
 if __name__ == "__main__":
