@@ -11,6 +11,9 @@ MAX_JOBS=32 pip install flash-attn --no-build-isolation
 
 # (optional) QLoRA -- Turing+ GPUs (e.g., RTX 8000)
 pip install bitsandbytes==0.43.1
+
+# evaluation
+pip install table_recognition_metric
 ```
 
 ## Quick start
