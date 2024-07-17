@@ -4,3 +4,4 @@ accelerate==0.32.1
 peft
 Levenshtein
 deepspeed==0.13.1
+table_recognition_metric
