@@ -36,7 +36,7 @@ class Phi3VisionPredictor:
         self.processor = AutoProcessor.from_pretrained(model_id_or_path, trust_remote_code=True)
 
     @torch.no_grad()
-    def __call__(self, message, image=None):
+    def __call__(self, message, image=None, max_new_tokens=5000, do_sample=False):
         messages = [
             {"role": "user", "content": f"<|image_1|>\n{message}"}
         ]
@@ -48,9 +48,8 @@ class Phi3VisionPredictor:
         generate_ids = self.model.generate(
             **inputs,
             eos_token_id=self.processor.tokenizer.eos_token_id,
-            max_new_tokens=10000,
-            temperature=0.0,
-            do_sample=False
+            max_new_tokens=max_new_tokens,
+            do_sample=do_sample
         )
 
         # remove input tokens
@@ -89,6 +88,17 @@ def main():
         default=None
     )
 
+    parser.add_argument(
+        '--max_new_tokens',
+        type=int,
+        default=5000
+    )
+
+    parser.add_argument(
+        '--do_sample',
+        action="store_false"
+    )
+
     args = parser.parse_args()
 
     print(f"User message: {args.message}")
@@ -96,8 +106,8 @@ def main():
     image = Image.open(args.image)
 
     predictor = Phi3VisionPredictor(args.model_id_or_path, peft_model=args.peft_model)
-    response = predictor(args.message, image)
     then = time.time()
+    response = predictor(args.message, image, args.max_new_tokens, args.do_sample)
     print(response)
     print(f"Time Taken: {time.time() - then}")
 
