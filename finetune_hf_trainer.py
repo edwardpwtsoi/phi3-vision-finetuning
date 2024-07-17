@@ -51,18 +51,10 @@ DS_CONFIG_DICT = {
 
 def create_dataset(use_full_train=False):
     """
-    DocVQA dataset from the Hugging Face Hub
+    PubTabNet-HTML dataset from the Hugging Face Hub
     """
-    if use_full_train:
-        train_dataset = load_dataset('HuggingFaceM4/the_cauldron', 'docvqa', split='train')
-    else:
-        # 1000 mini-train split
-        train_dataset = load_dataset('nielsr/docvqa_1200_examples', split='train')
-        train_dataset = train_dataset.remove_columns(['id', 'words', 'bounding_boxes', 'answer'])
-
-    # 200 mini-test split
-    eval_dataset = load_dataset('nielsr/docvqa_1200_examples', split='test')
-    eval_dataset = eval_dataset.remove_columns(['id', 'words', 'bounding_boxes', 'answer'])
+    train_dataset = load_dataset('apoidea/pubtabnet-html', split='train')
+    eval_dataset = load_dataset('apoidea/pubtabnet-html', split='validation')
 
     return train_dataset, eval_dataset
 
@@ -194,41 +186,6 @@ class VQADataCollatorBase(ABC):
         batch['labels'] = labels
 
         return batch
-
-
-class MiniDocVQADataCollator(VQADataCollatorBase):
-    @staticmethod
-    def _get_image_from_example(example):
-        return example['image']
-
-    @staticmethod
-    def _get_question_and_answer_from_example(example):
-        return example['query']['en'], random.choice(example['answers'])
-
-    @staticmethod
-    def _form_prompt_message(question):
-        return {
-            'role': 'user',
-            'content': f'<|image_1|>\n{question}\nAnswer briefly.',
-        }
-
-
-class DocVQADataCollator(VQADataCollatorBase):
-    @staticmethod
-    def _get_image_from_example(example):
-        return example['images'][0]
-
-    @staticmethod
-    def _get_question_and_answer_from_example(example):
-        text_dict = random.choice(example['texts'])
-        return text_dict['user'], text_dict['assistant']
-
-    @staticmethod
-    def _form_prompt_message(question):
-        return {
-            'role': 'user',
-            'content': f'<|image_1|>\n{question}',
-        }
 
 
 class PubTabNetHTMLDataCollator(VQADataCollatorBase):
@@ -439,10 +396,7 @@ def main():
         dataloader_prefetch_factor=2,
     )
 
-    if args.full_train:
-        data_collator = DocVQADataCollator(processor)
-    else:
-        data_collator = MiniDocVQADataCollator(processor)
+    data_collator = PubTabNetHTMLDataCollator(processor)
 
     # eval before fine-tuning
     out_path = Path(training_args.output_dir)
