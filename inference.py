@@ -15,15 +15,22 @@ def is_valid_file(parser, arg):
 
 
 class Phi3VisionPredictor:
-    def __init__(self, model_id_or_path, use_flash_attn=True, peft_model=None, use_torch_compile=True, local_rank=0):
+    def __init__(self, model_id_or_path=None, model=None, processor=None, use_flash_attn=True, peft_model=None, use_torch_compile=True, local_rank=0):
         self.local_rank = local_rank
-        self.model = AutoModelForCausalLM.from_pretrained(
-            model_id_or_path,
-            device_map=f"cuda:{local_rank}",
-            trust_remote_code=True,
-            torch_dtype=torch.bfloat16 if use_flash_attn else torch.float32,
-            _attn_implementation='flash_attention_2' if use_flash_attn else 'eager'
-        )
+        if model_id_or_path is not None:
+            self.model = AutoModelForCausalLM.from_pretrained(
+                model_id_or_path,
+                device_map=f"cuda:{local_rank}",
+                trust_remote_code=True,
+                torch_dtype=torch.bfloat16 if use_flash_attn else torch.float32,
+                _attn_implementation='flash_attention_2' if use_flash_attn else 'eager'
+            )
+            self.processor = AutoProcessor.from_pretrained(model_id_or_path, trust_remote_code=True)
+        elif model is not None and processor is not None:
+            self.model = model.to(f"cuda:{local_rank}")
+            self.processor = processor
+        else:
+            raise ValueError("Either `model_id_or_path` or `model and processor` should be provided")
 
         if peft_model is not None:
             self.model.load_adapter(peft_model)
@@ -32,8 +39,6 @@ class Phi3VisionPredictor:
 
         if use_torch_compile:
             self.model = torch.compile(self.model)
-
-        self.processor = AutoProcessor.from_pretrained(model_id_or_path, trust_remote_code=True)
 
     @torch.no_grad()
     def __call__(self, message, image=None, max_new_tokens=5000, do_sample=False):
